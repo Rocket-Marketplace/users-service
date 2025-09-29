@@ -12,6 +12,7 @@ import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../common/dto/create-user.dto';
 import { LoginDto } from '../common/dto/login.dto';
 import { ChangePasswordDto } from '../common/dto/change-password.dto';
+import { SessionsService } from '../sessions/sessions.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly sessionsService: SessionsService,
   ) {}
 
   async register(
@@ -48,7 +50,9 @@ export class AuthService {
 
   async login(
     loginDto: LoginDto,
-  ): Promise<{ user: Omit<User, 'password'>; token: string }> {
+    userAgent?: string,
+    ipAddress?: string,
+  ): Promise<{ user: Omit<User, 'password'>; token: string; sessionToken: string }> {
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
     });
@@ -72,9 +76,19 @@ export class AuthService {
     await this.userRepository.update(user.id, { lastLogin: new Date() });
 
     const token = this.generateToken(user);
+    const session = await this.sessionsService.createSession(
+      user.id,
+      userAgent,
+      ipAddress,
+    );
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...userWithoutPassword } = user;
-    return { user: userWithoutPassword, token };
+    return { 
+      user: userWithoutPassword, 
+      token, 
+      sessionToken: session.token 
+    };
   }
 
   async changePassword(
